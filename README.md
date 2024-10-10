@@ -8,30 +8,130 @@ Penjelasan Toko Kita
 - Form ini meminta input username dan password dari pengguna.
 - **Kode**:
   ```dart
-  TextField(
-    controller: _usernameController,
-    decoration: InputDecoration(
-      labelText: 'Username',
-    ),
-  ),
-  TextField(
-    controller: _passwordController,
-    decoration: InputDecoration(
-      labelText: 'Password',
-      obscureText: true,
-    ),
-  ),
-  ElevatedButton(
-    onPressed: () {
-      context.read<LoginBloc>().add(
-        LoginSubmitted(
-          username: _usernameController.text,
-          password: _passwordController.text,
+  class _LoginPageState extends State<LoginPage> {
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  final _emailTextboxController = TextEditingController();
+  final _passwordTextboxController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Login'),
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                _emailTextField(),
+                _passwordTextField(),
+                _buttonLogin(),
+                const SizedBox(
+                  height: 30,
+                ),
+                _menuRegistrasi()
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _emailTextField() {
+    return TextFormField(
+      decoration: const InputDecoration(labelText: "Email"),
+      keyboardType: TextInputType.emailAddress,
+      controller: _emailTextboxController,
+      validator: (value) {
+        if (value!.isEmpty) {
+          return 'Email harus diisi';
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _passwordTextField() {
+    return TextFormField(
+      decoration: const InputDecoration(labelText: "Password"),
+      keyboardType: TextInputType.text,
+      obscureText: true,
+      controller: _passwordTextboxController,
+      validator: (value) {
+        if (value!.isEmpty) {
+          return "Password harus diisi";
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _buttonLogin() {
+    return ElevatedButton(
+      child: const Text("Login"),
+      onPressed: () {
+        var validate = _formKey.currentState!.validate();
+        if (validate) {
+          if (!_isLoading) _submit();
+        }
+      },
+    );
+  }
+
+  void _submit() {
+    _formKey.currentState!.save();
+    setState(() {
+      _isLoading = true;
+    });
+    LoginBloc.login(
+        email: _emailTextboxController.text,
+        password: _passwordTextboxController.text
+    ).then((value) async {
+      print("Login successful: $value");
+      if (value.userID != null) {
+        await UserInfo().setToken(value.token ?? "");
+        await UserInfo().setUserID(value.userID!);
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(builder: (context) => const ProdukPage()));
+      } else {
+        throw Exception("UserID is null");
+      }
+    }).catchError((error) {
+      print("Login error: $error");
+      showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) => WarningDialog(
+            description: "Login gagal ${()}",
+          )
       );
-    },
-    child: Text('Login'),
-  ),
+    }).whenComplete(() {
+      setState(() {
+        _isLoading = false;
+      });
+    });
+  }
+
+  Widget _menuRegistrasi() {
+    return Center(
+      child: InkWell(
+        child: const Text(
+          "Registrasi",
+          style: TextStyle(color: Colors.blue),
+        ),
+        onTap: () {
+          Navigator.push(context,
+              MaterialPageRoute(builder: (context) => const RegistrasiPage()));
+        },
+      ),
+    );
+  }
+  }
   ```
 - **Penjelasan**: Ketika tombol login ditekan, event `LoginSubmitted` dikirim ke `LoginBloc` dengan data yang diinput.
 
@@ -40,40 +140,159 @@ Penjelasan Toko Kita
 - Fungsi login memproses input dari user dan mengirim request ke API.
 - **Kode**:
   ```dart
-  on<LoginSubmitted>((event, emit) async {
-    emit(LoginLoading());
-    try {
-      final response = await api.login(event.username, event.password);
-      if (response.success) {
-        emit(LoginSuccess());
-      } else {
-        emit(LoginFailure(error: response.message));
-      }
-    } catch (e) {
-      emit(LoginFailure(error: e.toString()));
+  class LoginBloc {
+    static Future<Login> login({String? email, String? password}) async {
+      String apiUrl = ApiUrl.login;
+      var body = {"email": email, "password": password};
+      var response = await Api().post(apiUrl, body);
+      var jsonObj = json.decode(response.body);
+      return Login.fromJson(jsonObj);
     }
-  });
+  }
   ```
-- **Penjelasan**: Fungsi ini memvalidasi username dan password. Jika berhasil, status berubah menjadi `LoginSuccess`; jika gagal, status berubah menjadi `LoginFailure`.
+- **Penjelasan**: Fungsi ini memvalidasi username dan password.
 
 ### c. Popup Berhasil/Gagal
 - File terkait: `success_dialog.dart` dan `warning_dialog.dart` di `/lib/widget/`.
 - ![Lampiran](52.png)
 - **Kode**:
   ```dart
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Login Gagal'),
-      content: Text('Login gagal ()'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text('OK'),
+  class SuccessDialog extends StatelessWidget {
+    final String? description;
+    final VoidCallback? okClick;
+    const SuccessDialog({Key? key, this.description, this.okClick}): super(key: key);
+    @override
+    Widget build(BuildContext context) {
+      return Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Consts.padding)),
+        elevation: 0.0,
+        backgroundColor: Colors.transparent,
+        child: dialogContent(context),
+      );
+    }
+    dialogContent(BuildContext context) {
+      return Container(
+        padding: const EdgeInsets.only(
+          top: Consts.padding,
+          bottom: Consts.padding,
+          left: Consts.padding,
+          right: Consts.padding,
         ),
-      ],
-    ),
-  );
+        margin: const EdgeInsets.only(top: Consts.avatarRadius),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.rectangle,
+          borderRadius: BorderRadius.circular(Consts.padding),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 10.0,
+              offset: Offset(0.0, 10.0),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "SUKSES",
+              style: TextStyle(
+                  fontSize: 24.0,
+                  fontWeight: FontWeight.w700,color: Colors.green),
+            ),
+            const SizedBox(height: 16.0),
+            Text(
+              description!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16.0,
+              ),
+            ),
+            const SizedBox(height: 24.0),
+            Align(
+              alignment: Alignment.bottomRight,
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // To close the dialog
+                  okClick!();
+                },
+                child: const Text("OK"),
+              ),
+            )
+          ],
+        ),
+      );
+    }
+  }
+  ```
+
+  ```dart
+  class WarningDialog extends StatelessWidget {
+    final String? description;
+    final VoidCallback? okClick;const WarningDialog({Key? key, this.description, this.okClick})
+        : super(key: key);
+    @override
+    Widget build(BuildContext context) {
+      return Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Consts.padding)),
+        elevation: 0.0,
+        backgroundColor: Colors.transparent,
+        child: dialogContent(context),
+      );
+    }
+    dialogContent(BuildContext context) {
+      return Container(
+        padding: const EdgeInsets.only(
+          top: Consts.padding,
+          bottom: Consts.padding,
+          left: Consts.padding,
+          right: Consts.padding,
+        ),
+        margin: const EdgeInsets.only(top: Consts.avatarRadius),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.rectangle,
+          borderRadius: BorderRadius.circular(Consts.padding),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 10.0,
+              offset: Offset(0.0, 10.0),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "GAGAL",
+              style: TextStyle(
+                  fontSize: 24.0, fontWeight: FontWeight.w700, color: Colors.red),),
+            const SizedBox(height: 16.0),
+            Text(
+              description!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16.0,
+              ),
+            ),
+            const SizedBox(height: 24.0),
+            Align(
+              alignment: Alignment.bottomRight,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // To close the dialog
+                },
+                child: const Text("OK"),
+              ),
+            )
+          ],
+        ),
+      );
+    }
+  }
   ```
 - **Penjelasan**: Jika login gagal, dialog peringatan ditampilkan dengan pesan kesalahan.
 
@@ -84,76 +303,95 @@ Penjelasan Toko Kita
 - ![Lampiran](53.png)
 - **Kode**:
   ```dart
-  ElevatedButton(
-    onPressed: () {
-      final product = Product(
-        name: _nameController.text,
-        price: double.parse(_priceController.text),
-      );
-      context.read<ProdukBloc>().add(AddProdukEvent(product));
-    },
-    child: Text('Tambah Produk'),
-  );
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  String judul = "TAMBAH PRODUK RAFLI";
+  String tombolSubmit = "SIMPAN";
+  final _kodeProdukTextboxController = TextEditingController();
+  final _namaProdukTextboxController = TextEditingController();
+  final _hargaProdukTextboxController = TextEditingController();
+  @override
   ```
-- **Penjelasan**: Setelah pengguna mengisi form dan menekan tombol, data produk dikirim sebagai event `AddProdukEvent` ke `ProdukBloc`.
+- **Penjelasan**: Setelah pengguna mengisi form dan menekan tombol, data produk dikirim sebagai event `AddProduk`.
 
 ### b. Tampil Data Produk
 - File terkait: `produk_page.dart` di `/lib/ui/`.
 - ![Lampiran](54.png)
 - **Kode**:
   ```dart
-  BlocBuilder<ProdukBloc, ProdukState>(
-    builder: (context, state) {
-      if (state is ProdukLoading) {
-        return CircularProgressIndicator();
-      } else if (state is ProdukLoaded) {
-        return ListView.builder(
-          itemCount: state.produkList.length,
-          itemBuilder: (context, index) {
-            final produk = state.produkList[index];
-            return ListTile(
-              title: Text(produk.name),
-              subtitle: Text('\$${produk.price}'),
-            );
-          },
-        );
-      } else {
-        return Text('Gagal memuat produk');
-      }
-    },
-  );
+  class ListProduk extends StatelessWidget {
+    final List? list;
+    const ListProduk({Key? key, this.list}) : super(key: key);
+    @override
+    Widget build(BuildContext context) {
+      return ListView.builder(
+          itemCount: list == null ? 0 : list!.length,
+          itemBuilder: (context, i) {
+            return ItemProduk(
+              produk: list![i],);
+          });
+    }
+  }
   ```
 - **Penjelasan**: `BlocBuilder` membangun UI berdasarkan state. Jika loading, tampilkan indikator; jika berhasil, tampilkan daftar produk.
 
 ### c. Update Data Produk
-- File terkait: `produk_detail.dart` di `/lib/ui/`.
 - ![Lampiran](55.png)
 - **Kode**:
   ```dart
-  ElevatedButton(
-    onPressed: () {
-      final updatedProduct = Product(
-        id: product.id,
-        name: _nameController.text,
-        price: double.parse(_priceController.text),
-      );
-      context.read<ProdukBloc>().add(UpdateProdukEvent(updatedProduct));
-    },
-    child: Text('Update Produk'),
-  );
+  ubah() {
+    setState(() {
+      _isLoading = true;
+    });
+    Produk updateProduk = Produk(id: widget.produk!.id!);
+    updateProduk.kodeProduk = _kodeProdukTextboxController.text;
+    updateProduk.namaProduk = _namaProdukTextboxController.text;
+    updateProduk.hargaProduk = int.parse(_hargaProdukTextboxController.text);
+    ProdukBloc.updateProduk(produk: updateProduk).then((value) {
+      Navigator.of(context).push(MaterialPageRoute(
+          builder: (BuildContext context) => const ProdukPage()));}, onError: (error) {
+      showDialog(
+          context: context,
+          builder: (BuildContext context) => const WarningDialog(
+            description: "Permintaan ubah data gagal, silahkan coba lagi",
+          ));
+    });
+    setState(() {
+      _isLoading = false;
+    });
+  }
   ```
 - **Penjelasan**: Setelah pengguna mengedit data dan menekan tombol, produk diperbarui di database.
 
 ### d. Hapus Data Produk
-- File terkait: `produk_page.dart` di `/lib/ui/`.
 - ![Lampiran](56.png)
 - **Kode**:
   ```dart
-  IconButton(
-    icon: Icon(Icons.delete),
-    onPressed: () {
-      context.read<ProdukBloc>().add(DeleteProdukEvent(produk.id));
-    },
-  );
+  void confirmHapus() {AlertDialog alertDialog = AlertDialog(
+      content: const Text("Yakin ingin menghapus data ini?"),
+      actions: [
+        OutlinedButton(
+          child: const Text("Ya"),
+          onPressed: () {
+            ProdukBloc.deleteProduk(id: int.parse(widget.produk!.id!)).then(
+                    (value) => {
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (context) => const ProdukPage()))
+                }, onError: (error) {
+              showDialog(
+                  context: context,
+                  builder: (BuildContext context) => const WarningDialog(
+                    description: "Hapus gagal, silahkan coba lagi",
+                  ));
+            });
+          },
+        ),
+  //tombol batal
+        OutlinedButton(
+          child: const Text("Batal"),
+          onPressed: () => Navigator.pop(context),
+        )
+      ],
+    );
   ```
-- **Penjelasan**: Fungsi ini menghapus produk dari sistem berdasarkan ID produk.
+- **Penjelasan**: Fungsi ini menghapus produk dari sistem.
