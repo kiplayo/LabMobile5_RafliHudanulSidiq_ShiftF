@@ -133,7 +133,7 @@ Penjelasan Toko Kita
   }
   }
   ```
-- **Penjelasan**: Ketika tombol login ditekan, event `LoginSubmitted` dikirim ke `LoginBloc` dengan data yang diinput.
+- **Penjelasan**: Ketika tombol login ditekan, event `Submitted` dikirim ke `LoginBloc` dengan data yang diinput.
 
 ### b. Validasi dan Proses Login
 - File terkait: `login_bloc.dart` di `/lib/bloc/`.
@@ -157,141 +157,38 @@ Penjelasan Toko Kita
 - ![Lampiran](52.png)
 - **Kode**:
   ```dart
-  class SuccessDialog extends StatelessWidget {
-    final String? description;
-    final VoidCallback? okClick;
-    const SuccessDialog({Key? key, this.description, this.okClick}): super(key: key);
-    @override
-    Widget build(BuildContext context) {
-      return Dialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(Consts.padding)),
-        elevation: 0.0,
-        backgroundColor: Colors.transparent,
-        child: dialogContent(context),
+  void _submit() {
+    _formKey.currentState!.save();
+    setState(() {
+      _isLoading = true;
+    });
+    LoginBloc.login(
+        email: _emailTextboxController.text,
+        password: _passwordTextboxController.text
+    ).then((value) async {
+      print("Login successful: $value");
+      if (value.userID != null) {
+        await UserInfo().setToken(value.token ?? "");
+        await UserInfo().setUserID(value.userID!);
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(builder: (context) => const ProdukPage()));
+      } else {
+        throw Exception("UserID is null");
+      }
+    }).catchError((error) {
+      print("Login error: $error");
+      showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) => WarningDialog(
+            description: "Login gagal ${()}",
+          )
       );
-    }
-    dialogContent(BuildContext context) {
-      return Container(
-        padding: const EdgeInsets.only(
-          top: Consts.padding,
-          bottom: Consts.padding,
-          left: Consts.padding,
-          right: Consts.padding,
-        ),
-        margin: const EdgeInsets.only(top: Consts.avatarRadius),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.rectangle,
-          borderRadius: BorderRadius.circular(Consts.padding),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 10.0,
-              offset: Offset(0.0, 10.0),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "SUKSES",
-              style: TextStyle(
-                  fontSize: 24.0,
-                  fontWeight: FontWeight.w700,color: Colors.green),
-            ),
-            const SizedBox(height: 16.0),
-            Text(
-              description!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16.0,
-              ),
-            ),
-            const SizedBox(height: 24.0),
-            Align(
-              alignment: Alignment.bottomRight,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.of(context).pop(); // To close the dialog
-                  okClick!();
-                },
-                child: const Text("OK"),
-              ),
-            )
-          ],
-        ),
-      );
-    }
-  }
-  ```
-
-  ```dart
-  class WarningDialog extends StatelessWidget {
-    final String? description;
-    final VoidCallback? okClick;const WarningDialog({Key? key, this.description, this.okClick})
-        : super(key: key);
-    @override
-    Widget build(BuildContext context) {
-      return Dialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(Consts.padding)),
-        elevation: 0.0,
-        backgroundColor: Colors.transparent,
-        child: dialogContent(context),
-      );
-    }
-    dialogContent(BuildContext context) {
-      return Container(
-        padding: const EdgeInsets.only(
-          top: Consts.padding,
-          bottom: Consts.padding,
-          left: Consts.padding,
-          right: Consts.padding,
-        ),
-        margin: const EdgeInsets.only(top: Consts.avatarRadius),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.rectangle,
-          borderRadius: BorderRadius.circular(Consts.padding),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 10.0,
-              offset: Offset(0.0, 10.0),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "GAGAL",
-              style: TextStyle(
-                  fontSize: 24.0, fontWeight: FontWeight.w700, color: Colors.red),),
-            const SizedBox(height: 16.0),
-            Text(
-              description!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16.0,
-              ),
-            ),
-            const SizedBox(height: 24.0),
-            Align(
-              alignment: Alignment.bottomRight,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop(); // To close the dialog
-                },
-                child: const Text("OK"),
-              ),
-            )
-          ],
-        ),
-      );
-    }
+    }).whenComplete(() {
+      setState(() {
+        _isLoading = false;
+      });
+    });
   }
   ```
 - **Penjelasan**: Jika login gagal, dialog peringatan ditampilkan dengan pesan kesalahan.
